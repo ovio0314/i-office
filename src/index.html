@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>나만의 AI Office</title>
+<style>
+  :root{
+    --bg:#fbf3f6; --ink:#3b2f3a; --muted:#8c7a88; --line:#ecd9e2; --card:#fff;
+    --accent:#e48bb0; --accent2:#f6d76b; --floor:#f7eef0; --floor2:#f2e6ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .wrap{max-width:1240px;margin:0 auto;padding:18px 16px 60px}
+
+  /* ── 헤더 ── */
+  header{display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:var(--card);
+         border:1px solid var(--line);border-radius:18px;padding:14px 18px}
+  .logo{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#e48bb0,#b38bea);
+        display:grid;place-items:center;color:#fff;font-weight:800;font-size:22px}
+  .live{font-size:11px;letter-spacing:.12em;color:var(--muted);font-weight:700}
+  .live b{color:#e2557f}
+  h1{margin:2px 0 0;font-size:24px;cursor:pointer}
+  h1:hover{color:var(--accent)}
+  .head-right{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .badge{padding:6px 12px;border-radius:999px;font-size:13px;border:1px solid var(--line);background:#fff}
+  .badge.on{background:#e9f8ef;border-color:#a7e0bd;color:#227a47}
+  .badge.off{background:#fff6e5;border-color:#f3d39b;color:#9a6a12}
+  .clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:18px}
+
+  /* ── 컨트롤 ── */
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:11px 16px;border-radius:12px;
+       font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(228,139,176,.2)}
+  .btn.main{background:var(--accent2);border-color:#e9c443}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+  .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .seg button{border:0;background:none;padding:11px 13px;cursor:pointer;font-weight:600;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:#fff}
+  select{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:14px;color:var(--ink)}
+
+  /* ── 메인 그리드 ── */
+  .main{display:grid;grid-template-columns:1fr 330px;gap:14px}
+  @media (max-width:980px){.main{grid-template-columns:1fr}}
+
+  /* ── 사무실 지도 ── */
+  .office{position:relative;aspect-ratio:16/10;border-radius:18px;overflow:hidden;border:1px solid var(--line);
+          background:
+            repeating-linear-gradient(0deg,transparent 0 39px,rgba(0,0,0,.025) 39px 40px),
+            repeating-linear-gradient(90deg,transparent 0 39px,rgba(0,0,0,.025) 39px 40px),var(--floor)}
+  .room{position:absolute;border:3px solid #e4cdd8;border-radius:14px}
+  .room .label{position:absolute;top:6px;left:10px;font-size:12px;font-weight:700;color:var(--muted);
+               background:rgba(255,255,255,.8);padding:2px 8px;border-radius:8px}
+  .r-work{left:2%;top:4%;width:61%;height:68%;background:rgba(255,255,255,.45)}
+  .r-meet{left:66%;top:4%;width:32%;height:68%;background:#fdf6e8;border-color:#efdcae}
+  .r-lounge{left:66%;top:80%;width:32%;height:17%;background:#eef7f1;border-color:#c7e6d2}
+  .door{position:absolute;left:36%;bottom:0;width:8%;height:2.2%;background:#c99c7a;border-radius:6px 6px 0 0}
+  .door::after{content:"입구";position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--muted)}
+
+  .desk{position:absolute;width:12%;height:9%;transform:translate(-50%,-50%);background:#e8c9a8;border-radius:8px;
+        box-shadow:0 3px 0 #cfa883}
+  .desk .mon{position:absolute;left:50%;top:-38%;width:46%;height:70%;transform:translateX(-50%);
+             background:#4b4453;border-radius:5px;border:3px solid #6b6274}
+  .desk.working .mon{background:#9fe3ff;box-shadow:0 0 14px #9fe3ff;animation:screen 1s steps(2) infinite}
+  @keyframes screen{50%{background:#c6f0ff}}
+  .desk .plate{position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);font-size:11px;white-space:nowrap;
+               color:var(--muted)}
+  .table{position:absolute;left:82%;top:37%;width:16%;height:22%;transform:translate(-50%,-50%);
+         background:#f1d9a6;border-radius:50%;box-shadow:0 4px 0 #d9bd84}
+  .board{position:absolute;left:73%;top:9%;width:18%;height:6%;background:#fff;border:3px solid #ddd;border-radius:6px;
+         font-size:10px;display:grid;place-items:center;color:#999}
+  .deco{position:absolute;font-size:clamp(14px,2.2vw,26px);transform:translate(-50%,-50%);user-select:none}
+
+  /* ── 직원 캐릭터 ── */
+  .emp{position:absolute;transform:translate(-50%,-92%);width:5.2%;cursor:pointer;z-index:5;
+       transition-property:left,top;transition-timing-function:linear}
+  .emp svg{width:100%;display:block;filter:drop-shadow(0 3px 2px rgba(0,0,0,.15))}
+  .emp:hover svg{filter:drop-shadow(0 0 6px var(--accent))}
+  .emp.sel svg{filter:drop-shadow(0 0 7px #e2557f)}
+  .emp .tag{position:absolute;left:50%;top:100%;transform:translateX(-50%);font-size:11px;font-weight:700;
+            background:#fff;border:1px solid var(--line);border-radius:8px;padding:1px 6px;white-space:nowrap}
+  .emp.walking .leg-l{animation:legL .3s infinite alternate} .emp.walking .leg-r{animation:legR .3s infinite alternate}
+  @keyframes legL{to{transform:translateY(-3px)}} @keyframes legR{from{transform:translateY(-3px)}}
+  .emp.typing svg{animation:type .25s infinite alternate}
+  @keyframes type{to{transform:translateY(-2px)}}
+  .emp.hidden{opacity:0;pointer-events:none}
+  .emp .say{position:absolute;bottom:104%;left:50%;transform:translateX(-50%);background:#fff;border:1px solid var(--line);
+            border-radius:10px;padding:4px 8px;font-size:11.5px;white-space:nowrap;max-width:220px;overflow:hidden;
+            text-overflow:ellipsis;box-shadow:0 3px 8px rgba(0,0,0,.08);opacity:0;transition:opacity .2s;pointer-events:none}
+  .emp .say.show{opacity:1}
+
+  .phase{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(59,47,58,.85);color:#fff;
+         padding:14px 26px;border-radius:14px;font-size:20px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:20}
+  .phase.show{opacity:1}
+
+  /* ── 사이드 패널 ── */
+  .side{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px}
+  .panel h3{margin:0 0 10px;font-size:15px}
+  #log{height:300px;overflow:auto;font-size:13px;line-height:1.55}
+  #log div{padding:3px 0;border-bottom:1px dashed #f1e4ea}
+  #log .t{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
+  .staff-card .top{display:flex;gap:12px;align-items:center}
+  .staff-card .avatar{width:56px;flex:none}
+  .staff-card .role{color:var(--muted);font-size:13px}
+  .staff-card .out{max-height:260px;overflow:auto;font-size:13px;margin-top:10px;background:#fcf8fa;border-radius:10px;padding:8px 10px}
+  .order{display:flex;gap:6px;margin-top:10px}
+  .order input{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px}
+  .order button{padding:9px 12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+  .hint{color:var(--muted);font-size:13px}
+
+  /* ── 결과물 ── */
+  .results{margin-top:14px;display:grid;grid-template-columns:1fr 280px;gap:14px}
+  @media (max-width:980px){.results{grid-template-columns:1fr}}
+  .main>*,.results>*{min-width:0}
+  #report,.staff-card .out{overflow-wrap:anywhere}
+  #report{font-size:14.5px;line-height:1.65;min-height:120px}
+  #report h1{font-size:22px;cursor:auto} #report h2{font-size:18px;margin-top:22px} #report h3{font-size:16px;margin:18px 0 6px}
+  #report a{color:#c2457a} #report blockquote{margin:6px 0;padding:6px 12px;background:#fdf3f7;border-left:3px solid var(--accent);border-radius:6px}
+  #reports button{display:block;width:100%;text-align:left;border:0;background:#fcf8fa;padding:8px 10px;border-radius:8px;
+                  margin-bottom:6px;cursor:pointer;font-size:13px;color:var(--ink)}
+  #reports button:hover{background:#f7e5ed}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">AI</div>
+    <div>
+      <div class="live"><b>●</b> LIVE OFFICE · <span id="staffCount">6</span> AI STAFF</div>
+      <h1 id="company" title="클릭해서 회사 이름 바꾸기"></h1>
+    </div>
+    <div class="head-right">
+      <span class="badge" id="brain">🧠 확인 중...</span>
+      <span class="clock" id="clock">08:50</span>
+    </div>
+  </header>
+
+  <div class="controls">
+    <button class="btn main" id="startBtn">▶ 오늘 업무 시작하기</button>
+    <button class="btn" id="pauseBtn">⏸ 일시정지</button>
+    <div class="seg" id="speed">
+      <button data-s="1" class="on">1x</button><button data-s="2">2x</button><button data-s="4">4x</button>
+    </div>
+    <select id="lang" title="리서치 범위">
+      <option value="ko">🇰🇷 국내 뉴스</option>
+      <option value="all">🌏 국내+해외</option>
+      <option value="en">🌎 해외 뉴스</option>
+    </select>
+    <button class="btn" id="homeBtn">🏠 퇴근</button>
+    <a class="btn" href="/nuri" style="text-decoration:none">🤖 누리 뉴스창</a>
+  </div>
+
+  <div class="main">
+    <div class="office" id="office">
+      <div class="room r-work"><span class="label">💻 업무 공간</span></div>
+      <div class="room r-meet"><span class="label">🗂 회의실</span></div>
+      <div class="room r-lounge"><span class="label">☕ 라운지</span></div>
+      <div class="board" id="board">오늘의 안건</div>
+      <div class="table"></div>
+      <div class="door"></div>
+      <div class="deco" style="left:4.5%;top:76%">🪴</div>
+      <div class="deco" style="left:60%;top:76%">🪴</div>
+      <div class="deco" style="left:70%;top:89%">☕</div>
+      <div class="deco" style="left:84%;top:90%">🛋️</div>
+      <div class="deco" style="left:95%;top:89%">🪴</div>
+      <div class="deco" style="left:95%;top:64%">📚</div>
+      <div class="phase" id="phase"></div>
+    </div>
+
+    <div class="side">
+      <div class="panel staff-card" id="staffCard">
+        <h3>👥 직원 정보</h3>
+        <p class="hint">사무실의 직원을 클릭하면 프로필과 오늘 한 일을 볼 수 있고, 따로 업무를 지시할 수도 있어요.</p>
+      </div>
+      <div class="panel">
+        <h3>📝 업무 일지</h3>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results">
+    <div class="panel">
+      <h3>📄 오늘의 보고서</h3>
+      <div id="report" class="hint">아직 보고서가 없어요. '오늘 업무 시작하기'를 눌러보세요!</div>
+    </div>
+    <div class="panel">
+      <h3>📁 업무결과 폴더</h3>
+      <div id="reports" class="hint">불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ───────── 직원 명단 (이름·색·업무를 마음대로 바꿔보세요) ───────── */
+const STAFF = [
+  {id:'researcher', name:'누리', team:'리서치팀', emoji:'🔎', hair:'#6b4a3a', shirt:'#8fb8ff',
+   job:'여러 뉴스 사이트에서 최신 AI 기사를 수집해요.', plan:'최신 AI 기사 모아올게요!', desk:[13,24]},
+  {id:'analyst', name:'하나', team:'분석팀', emoji:'📊', hair:'#2f2a36', shirt:'#9be0c2',
+   job:'오늘 가장 많이 언급된 키워드와 트렌드를 분석해요.', plan:'오늘의 트렌드 분석할게요.', desk:[32,24]},
+  {id:'editor', name:'도담', team:'편집팀', emoji:'✍️', hair:'#c9853f', shirt:'#ffc79b',
+   job:'중요한 뉴스 5개로 오늘의 AI 브리핑을 작성해요.', plan:'브리핑 기사 쓸게요.', desk:[51,24]},
+  {id:'marketer', name:'별', team:'마케팅팀', emoji:'📣', hair:'#e46f9b', shirt:'#ffe08a',
+   job:'오늘 뉴스로 SNS 게시물 초안을 만들어요.', plan:'SNS 게시물 만들게요!', desk:[13,52]},
+  {id:'planner', name:'가온', team:'기획팀', emoji:'💡', hair:'#3d5a80', shirt:'#c7b3ff',
+   job:'대표님이 해볼 만한 일과 아이디어를 제안해요.', plan:'아이디어 기획할게요.', desk:[32,52]},
+  {id:'secretary', name:'미소', team:'비서실', emoji:'📋', hair:'#8a5a44', shirt:'#ffb3c7',
+   job:'팀원들의 보고를 모아 최종 보고서를 정리하고 저장해요.', plan:'보고서 정리해서 드릴게요.', desk:[51,52]},
+];
+const DOOR = [40, 99], HALL_Y = 76;
+const MEET_SEATS = [[74,28],[82,22],[90,28],[74,47],[82,53],[90,47]];
+const LOUNGE = [[70,93],[75,93],[80,93],[87,93],[91,93],[78,88]];
+
+/* ───────── 상태 ───────── */
+let speed = 1, paused = false, running = false, inOffice = false;
+let articles = [], outputs = {}, selected = null, officeMin = 8*60+50;
+const $ = id => document.getElementById(id);
+const office = $('office');
+
+/* ───────── 회사 이름 ───────── */
+function setCompany(n){ $('company').textContent = n; document.title = n; }
+setCompany(localStorage.getItem('company') || '나만의 AI Office');
+$('company').onclick = () => {
+  const n = prompt('회사 이름을 정해주세요', $('company').textContent);
+  if (n && n.trim()) { localStorage.setItem('company', n.trim()); setCompany(n.trim()); }
+};
+
+/* ───────── 캐릭터 그리기 ───────── */
+function charSVG(s){
+  return `<svg viewBox="0 0 40 56">
+    <rect class="leg-l" x="13" y="44" width="5" height="10" rx="2" fill="#5b5266"/>
+    <rect class="leg-r" x="22" y="44" width="5" height="10" rx="2" fill="#5b5266"/>
+    <rect x="8" y="28" width="24" height="19" rx="8" fill="${s.shirt}"/>
+    <circle cx="20" cy="18" r="12" fill="#ffe0c7"/>
+    <path d="M8 18 Q8 4 20 5 Q32 4 32 18 Q28 10 20 11 Q12 10 8 18Z" fill="${s.hair}"/>
+    <circle cx="15.5" cy="19" r="1.7" fill="#3b2f3a"/><circle cx="24.5" cy="19" r="1.7" fill="#3b2f3a"/>
+    <circle cx="12.5" cy="23" r="2" fill="#ffadc6" opacity=".7"/><circle cx="27.5" cy="23" r="2" fill="#ffadc6" opacity=".7"/>
+    <path d="M17.5 24 Q20 26.5 22.5 24" stroke="#3b2f3a" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+  </svg>`;
+}
+
+STAFF.forEach((s, i) => {
+  const d = document.createElement('div');
+  d.className = 'desk'; d.style.left = s.desk[0]+'%'; d.style.top = s.desk[1]+'%';
+  d.innerHTML = `<div class="mon"></div><div class="plate">${s.emoji} ${s.team}</div>`;
+  office.appendChild(d); s.deskEl = d;
+
+  const e = document.createElement('div');
+  e.className = 'emp hidden';
+  e.innerHTML = `<div class="say"></div>${charSVG(s)}<div class="tag">${s.name}</div>`;
+  office.appendChild(e); s.el = e; s.pos = [...DOOR]; s.status = '출근 전';
+  place(s, DOOR);
+  e.onclick = () => showStaff(s);
+});
+$('staffCount').textContent = STAFF.length;
+
+/* ───────── 이동·시간 도구 ───────── */
+function place(s, [x, y]){ s.el.style.transitionDuration = '0s'; s.el.style.left = x+'%'; s.el.style.top = y+'%'; s.pos=[x,y]; }
+async function gate(){ while (paused) await new Promise(r => setTimeout(r, 150)); }
+async function wait(ms){
+  await gate();
+  const real = ms / speed;
+  await new Promise(r => setTimeout(r, real));
+  tickClock(ms / 1000 * 4);
+}
+function tickClock(min){
+  officeMin = Math.min(officeMin + min, 23*60+59);
+  const h = Math.floor(officeMin/60), m = Math.floor(officeMin%60);
+  $('clock').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function setClock(h, m){ officeMin = Math.max(officeMin, h*60+m); tickClock(0); }
+
+async function step(s, [x, y]){
+  await gate();
+  const [x0, y0] = s.pos, dist = Math.hypot(x-x0, y-y0);
+  if (dist < .3) return;
+  const sec = dist / 22 / speed;
+  s.el.style.transitionDuration = sec + 's';
+  s.el.style.left = x+'%'; s.el.style.top = y+'%'; s.pos = [x, y];
+  await new Promise(r => setTimeout(r, sec*1000));
+}
+async function walk(s, to){            // 복도를 따라 걷기
+  s.el.classList.add('walking'); s.el.classList.remove('typing');
+  if (Math.abs(s.pos[1]-HALL_Y) > 1) await step(s, [s.pos[0], HALL_Y]);
+  await step(s, [to[0], HALL_Y]);
+  await step(s, to);
+  s.el.classList.remove('walking');
+}
+const seat = s => [s.desk[0], s.desk[1]+8];
+
+function say(s, text, ms = 2600){
+  const b = s.el.querySelector('.say');
+  b.textContent = text; b.classList.add('show');
+  clearTimeout(s.sayT);
+  if (ms) s.sayT = setTimeout(() => b.classList.remove('show'), ms / speed);
+}
+function setStatus(s, st){ s.status = st; if (selected === s) showStaff(s); }
+function log(text){
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="t">${$('clock').textContent}</span>${text}`;
+  $('log').prepend(d);
+}
+async function phase(text){
+  const p = $('phase'); p.textContent = text; p.classList.add('show');
+  await wait(1400); p.classList.remove('show');
+}
+const byId = id => STAFF.find(s => s.id === id);
+
+/* ───────── 서버 통신 ───────── */
+async function api(path, body){
+  const r = await fetch(path, body ? {method:'POST', headers:{'Content-Type':'application/json'},
+                                      body: JSON.stringify(body)} : undefined);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function checkBrain(){
+  try {
+    const s = await api('/api/status');
+    const b = $('brain');
+    if (s.kind === 'ollama') {
+      b.className = 'badge on'; b.textContent = '🧠 무료 AI 연결됨';
+      b.title = `내 컴퓨터의 Ollama (${s.model}) — 요금 0원`;
+    } else if (s.kind === 'claude') {
+      b.className = 'badge on'; b.textContent = '🧠 Claude 연결됨 (유료)'; b.title = `모델: ${s.model}`;
+    } else {
+      b.className = 'badge off'; b.textContent = '🧠 기본 모드 (무료)';
+      b.title = 'Ollama(무료)를 설치하고 모델을 받으면 AI 두뇌가 자동으로 켜져요 → ollama.com';
+    }
+  } catch { $('brain').textContent = '⚠️ 서버 꺼짐'; $('brain').className = 'badge off'; }
+}
+setInterval(() => { if (!running) checkBrain(); }, 20000);   // Ollama를 나중에 켜도 자동 감지
+
+/* ───────── 하루 일과 ───────── */
+async function startDay(){
+  if (running) return;
+  running = true; $('startBtn').disabled = true; $('homeBtn').disabled = true;
+  outputs = {}; articles = [];
+  officeMin = inOffice ? 9*60+25 : 8*60+55; tickClock(0);   // 매번 새로운 하루
+  try {
+    // 1) 출근
+    if (!inOffice) {
+      await phase('☀️ 출근 시간');
+      log('🏢 오피스 문이 열렸어요.');
+      await Promise.all(STAFF.map(async (s, i) => {
+        await wait(i * 700);
+        place(s, DOOR); s.el.classList.remove('hidden');
+        say(s, '좋은 아침이에요!');
+        await walk(s, seat(s));
+        setStatus(s, '자리에서 대기 중');
+        log(`${s.emoji} <b>${s.name}</b> 출근했습니다.`);
+      }));
+      inOffice = true;
+    }
+
+    // 2) 아침 회의
+    setClock(9, 30);
+    await phase('🗂 아침 회의');
+    $('board').textContent = '📌 오늘의 AI 뉴스';
+    await Promise.all(STAFF.map((s, i) => walk(s, MEET_SEATS[i])));
+    const sec = byId('secretary');
+    say(sec, '대표님, 오늘 회의 시작할게요!'); log('🗂 아침 회의가 시작됐어요.');
+    await wait(1800);
+    for (const s of STAFF) { say(s, s.plan, 2000); setStatus(s, '회의 중'); await wait(1100); }
+
+    // 3) 업무 시작
+    setClock(10, 0);
+    await phase('💻 업무 시작');
+    await Promise.all(STAFF.map(s => walk(s, seat(s))));
+
+    // 3-1) 리서치
+    const res = byId('researcher');
+    startWork(res, '기사 수집 중... 🔎');
+    articles = await api(`/api/news?lang=${$('lang').value}`);
+    stopWork(res);
+    outputs.researcher = `### 🔎 수집한 기사 ${articles.length}건\n\n` +
+      articles.slice(0, 10).map(a => `- [${mdt(a.title)}](${a.link}) — ${a.source}`).join('\n');
+    say(res, `기사 ${articles.length}개 모았어요!`); setStatus(res, '수집 완료');
+    log(`🔎 <b>누리</b>가 기사 ${articles.length}건을 수집했어요.`);
+    if (!articles.length) throw new Error('기사가 없어요');
+
+    // 누리가 자료를 나눠줌
+    await walk(res, [41, 38]); say(res, '자료 공유했어요! 📎'); await wait(1200);
+    walk(res, seat(res));
+
+    // 3-2) 팀별 업무 (동시에 진행)
+    const team = ['analyst', 'editor', 'marketer', 'planner'].map(byId);
+    await Promise.all(team.map(async s => {
+      startWork(s, '작업 중... ⌨️');
+      const r = await api('/api/work', {role: s.id, articles});
+      stopWork(s);
+      outputs[s.id] = r.text;
+      say(s, '완료했어요! ✅'); setStatus(s, '업무 완료');
+      log(`${s.emoji} <b>${s.name}</b> 업무 완료${r.ai ? ' (AI)' : ''}.`);
+    }));
+
+    // 3-3) 비서 최종 정리
+    startWork(sec, '보고서 정리 중... 📋');
+    const r = await api('/api/work', {role: 'secretary', articles, outputs});
+    outputs.secretary = r.text;
+    const md = buildReport();
+    const saved = await api('/api/save', {markdown: md});
+    stopWork(sec); setStatus(sec, '보고서 저장 완료');
+    log(`📋 <b>미소</b>가 보고서를 저장했어요: <i>${saved.name}</i>`);
+
+    // 4) 보고
+    setClock(17, 0);
+    await phase('📣 업무 보고');
+    $('board').textContent = '✅ 오늘 업무 완료';
+    await Promise.all(STAFF.map((s, i) => walk(s, MEET_SEATS[i])));
+    say(sec, '대표님, 오늘 보고서 완성했어요! 💖', 3500);
+    renderReport(md); loadReports();
+    await wait(2500);
+    STAFF.forEach(s => say(s, '수고하셨습니다!', 2000));
+    await wait(1500);
+
+    // 5) 휴식
+    await Promise.all(STAFF.map((s, i) => walk(s, LOUNGE[i])));
+    STAFF.forEach(s => setStatus(s, '라운지에서 휴식 중'));
+    log('☕ 모두 라운지에서 쉬는 중이에요. 직원을 클릭해 추가 업무를 지시할 수 있어요.');
+  } catch (e) {
+    log(`⚠️ 문제가 생겼어요: ${e.message}. 서버(assistant.py)가 켜져 있는지 확인해 주세요.`);
+    STAFF.forEach(stopWork);
+  }
+  running = false; $('startBtn').disabled = false; $('homeBtn').disabled = false;
+  $('startBtn').textContent = '▶ 다시 업무 시작하기';
+}
+
+function startWork(s, text){ s.el.classList.add('typing'); s.deskEl.classList.add('working'); say(s, text, 0); setStatus(s, text); }
+function stopWork(s){ s.el.classList.remove('typing'); s.deskEl.classList.remove('working'); }
+
+async function goHome(){
+  if (running || !inOffice) return;
+  running = true;
+  setClock(18, 0); await phase('🌙 퇴근 시간');
+  await Promise.all(STAFF.map(async (s, i) => {
+    await wait(i * 400); say(s, '내일 봬요! 👋'); await walk(s, DOOR);
+    s.el.classList.add('hidden'); setStatus(s, '퇴근');
+  }));
+  log('🌙 모두 퇴근했어요. 오늘도 수고하셨습니다!');
+  inOffice = false; running = false;
+}
+
+/* ───────── 보고서 ───────── */
+const mdt = t => (t || '').replace(/\[/g, '(').replace(/\]/g, ')');
+function buildReport(){
+  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'long'});
+  const part = (id) => outputs[id] ? `\n\n${outputs[id]}\n` : '';
+  return `# ${$('company').textContent} 업무 보고서\n_${today}_\n` +
+    part('secretary') + part('editor') + part('analyst') + part('marketer') + part('planner') +
+    `\n\n## 📎 수집 기사 목록\n` + articles.slice(0, 20).map(a => `- [${mdt(a.title)}](${a.link}) — ${a.source}`).join('\n');
+}
+
+function md2html(md){
+  const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const inline = s => esc(s)
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|\s)_([^_]+)_(?=\s|$)/g, '$1<i>$2</i>');
+  let html = '', list = null;
+  const close = () => { if (list) { html += list === 'bq' ? '</blockquote>' : `</${list}>`; list = null; } };
+  for (const raw of md.split('\n')) {
+    const line = raw.trimEnd();
+    let m;
+    if ((list === 'ol' || list === 'ul') && /^\s{2,}\S/.test(line)) {          // 들여쓴 줄 = 항목의 이어지는 내용
+      html = html.replace(/<\/li>$/, `<div>${inline(line.trim().replace(/^[-*]\s+/, ''))}</div></li>`);
+    }
+    else if ((m = line.match(/^(#{1,4})\s+(.*)/))) { close(); html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; }
+    else if ((m = line.match(/^[-*]\s+(.*)/))) { if (list !== 'ul') { close(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^\d+\.\s+(.*)/))) { if (list !== 'ol') { close(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^>\s?(.*)/))) { if (list !== 'bq') { close(); html += '<blockquote>'; list = 'bq'; } else html += '<br>'; html += inline(m[1]); }
+    else if (!line.trim()) { close(); }
+    else { close(); html += `<p>${inline(line.trim())}</p>`; }
+  }
+  close(); return html;
+}
+function renderReport(md){ $('report').className = ''; $('report').innerHTML = md2html(md); }
+
+async function loadReports(){
+  try {
+    const list = await api('/api/reports');
+    $('reports').className = list.length ? '' : 'hint';
+    $('reports').innerHTML = list.length ? '' : '아직 저장된 보고서가 없어요.';
+    list.forEach(n => {
+      const b = document.createElement('button'); b.textContent = '📄 ' + n.replace('_AI오피스_보고서.md', '');
+      b.onclick = async () => {
+        const r = await fetch('/api/report?name=' + encodeURIComponent(n));
+        renderReport(await r.text()); $('report').scrollIntoView({behavior:'smooth'});
+      };
+      $('reports').appendChild(b);
+    });
+  } catch { $('reports').textContent = '서버에 연결할 수 없어요.'; }
+}
+
+/* ───────── 직원 카드 & 업무 지시 ───────── */
+function showStaff(s){
+  selected = s;
+  STAFF.forEach(x => x.el.classList.toggle('sel', x === s));
+  const out = outputs[s.id];
+  $('staffCard').innerHTML = `
+    <h3>👥 직원 정보</h3>
+    <div class="top"><div class="avatar">${charSVG(s)}</div>
+      <div><b style="font-size:17px">${s.name}</b> <span class="role">${s.emoji} ${s.team}</span>
+      <div class="role">${s.job}</div><div class="role">상태: <b>${s.status}</b></div></div></div>
+    ${out ? `<div class="out">${md2html(out)}</div>` : '<p class="hint">아직 오늘 한 업무가 없어요.</p>'}
+    <form class="order" id="orderForm">
+      <input id="orderInput" placeholder="${s.id === 'researcher' ? '찾을 주제 (예: 로봇)' : '업무 지시 (예: 반도체 관련만 정리해줘)'}">
+      <button>지시</button>
+    </form>`;
+  $('orderForm').onsubmit = e => { e.preventDefault(); order(s, $('orderInput').value.trim()); };
+}
+
+async function order(s, text){
+  if (!text) return;
+  if (!inOffice) { log('🏢 직원들이 출근 전이에요. 먼저 업무를 시작해 주세요.'); return; }
+  if (s.busy) return;
+  s.busy = true;
+  log(`👑 대표님 → <b>${s.name}</b>: "${text}"`);
+  say(s, '네, 대표님! 바로 할게요 🫡');
+  const back = s.pos;
+  if (!running) await walk(s, seat(s));
+  startWork(s, '지시 업무 처리 중...');
+  try {
+    if (s.id === 'researcher') {
+      const found = await api(`/api/news?lang=${$('lang').value}&q=${encodeURIComponent(text)}`);
+      if (found.length) articles = found;
+      outputs.researcher = `### 🔎 "${text}" 관련 기사 ${found.length}건\n\n` +
+        found.slice(0, 12).map(a => `- [${mdt(a.title)}](${a.link}) — ${a.source}`).join('\n');
+    } else {
+      if (!articles.length) articles = await api(`/api/news?lang=${$('lang').value}`);
+      const r = await api('/api/work', {role: s.id, articles, outputs, instruction: text});
+      outputs[s.id] = r.text;
+    }
+    say(s, '다 했어요! 확인해 주세요 ✅'); setStatus(s, '지시 업무 완료');
+    log(`${s.emoji} <b>${s.name}</b>가 지시 업무를 끝냈어요.`);
+  } catch (e) { say(s, '앗, 실패했어요 😢'); log(`⚠️ ${s.name}: 오류 (${e.message})`); }
+  stopWork(s);
+  if (!running) await walk(s, back);
+  s.busy = false;
+  showStaff(s);
+}
+
+/* ───────── 버튼 연결 ───────── */
+$('startBtn').onclick = startDay;
+$('homeBtn').onclick = goHome;
+$('pauseBtn').onclick = () => {
+  paused = !paused;
+  $('pauseBtn').textContent = paused ? '▶ 계속하기' : '⏸ 일시정지';
+  office.style.filter = paused ? 'grayscale(.6)' : '';
+  log(paused ? '⏸ 잠시 멈췄어요.' : '▶ 다시 일을 시작해요.');
+};
+document.querySelectorAll('#speed button').forEach(b => b.onclick = () => {
+  speed = +b.dataset.s;
+  document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b));
+});
+
+checkBrain(); loadReports();
+log('👋 대표님, 환영합니다! "오늘 업무 시작하기"를 눌러주세요.');
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>나의 개인 비서 - 누리</title>
+<style>
+  :root { --bg:#0f1220; --card:#1a1e33; --text:#e8eaf6; --muted:#9aa0c3; --accent:#7c6cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+         background: radial-gradient(circle at 50% 0%, #22264a 0%, var(--bg) 55%); color:var(--text); min-height:100vh; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 60px; }
+
+  /* ---------- 캐릭터 영역 ---------- */
+  .stage { display:flex; flex-direction:column; align-items:center; margin-top: 10px; }
+  .bubble { position:relative; background:#fff; color:#222; padding:14px 20px; border-radius:18px;
+            max-width: 460px; text-align:center; font-size:16px; line-height:1.5; min-height: 50px;
+            box-shadow: 0 6px 20px rgba(0,0,0,.3); margin-bottom: 14px; }
+  .bubble::after { content:""; position:absolute; bottom:-10px; left:50%; transform:translateX(-50%);
+            border:10px solid transparent; border-top-color:#fff; border-bottom:0; }
+  .bubble.pop { animation: pop .3s ease; }
+  @keyframes pop { 0%{transform:scale(.85);opacity:.4} 100%{transform:scale(1);opacity:1} }
+
+  #buddy { width: 190px; height: 190px; cursor:pointer; user-select:none;
+           animation: bob 3s ease-in-out infinite; transition: transform .15s;
+           filter: drop-shadow(0 12px 18px rgba(124,108,255,.35)); }
+  #buddy:hover { transform: scale(1.06); }
+  #buddy:active { transform: scale(.95); }
+  @keyframes bob { 0%,100%{translate:0 0} 50%{translate:0 -10px} }
+  .thinking #buddy { animation: wiggle .5s ease-in-out infinite; }
+  @keyframes wiggle { 0%,100%{rotate:-4deg} 50%{rotate:4deg} }
+  .happy #buddy { animation: jump .45s ease 2; }
+  @keyframes jump { 0%,100%{translate:0 0} 50%{translate:0 -28px} }
+
+  /* 표정 전환 */
+  .face { display:none; }
+  .idle .f-idle, .thinking .f-think, .happy .f-happy, .sad .f-sad { display:inline; }
+  .blink { animation: blink 4s infinite; transform-origin: center 88px; }
+  @keyframes blink { 0%,94%,100%{transform:scaleY(1)} 97%{transform:scaleY(.1)} }
+  .antenna-light { animation: glow 1.6s ease-in-out infinite; }
+  .thinking .antenna-light { animation-duration: .35s; }
+  @keyframes glow { 0%,100%{fill:#ffd166} 50%{fill:#fff3c4} }
+
+  .hint { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  /* 빠른 메뉴 */
+  .menu { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin: 18px 0 6px; }
+  .chip { padding: 9px 15px; border-radius: 999px; border:1px solid #3a4170; background: var(--card);
+          color: var(--text); font-size: 14px; cursor:pointer; transition:.15s; }
+  .chip:hover { border-color: var(--accent); background:#262b4d; }
+  .ask { display:flex; gap:8px; max-width: 520px; margin: 8px auto 0; }
+  .ask input { flex:1; padding: 11px 14px; border-radius: 10px; border: 1px solid #333a5c;
+               background: var(--card); color: var(--text); font-size: 15px; }
+  .ask button { padding: 11px 18px; border:0; border-radius:10px; background:var(--accent);
+                color:#fff; font-weight:600; cursor:pointer; }
+
+  /* 기사 카드 */
+  #list { margin-top: 22px; }
+  .card { background: var(--card); border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+          border-left: 4px solid var(--accent); animation: fadeUp .35s ease both; }
+  @keyframes fadeUp { from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
+  .card a { color: var(--text); text-decoration: none; font-size: 17px; font-weight: 600; line-height: 1.4; }
+  .card a:hover { color: #b3a9ff; text-decoration: underline; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .summary { color: #c5c9e6; font-size: 14px; margin: 8px 0 0; line-height: 1.5; }
+  .tag { background:#2a2f52; padding:2px 8px; border-radius:6px; margin-right:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage idle" id="stage">
+    <div class="bubble" id="bubble"></div>
+
+    <!-- 캐릭터 '누리' (클릭하세요!) -->
+    <svg id="buddy" viewBox="0 0 200 200" role="button" aria-label="비서 누리를 클릭하면 AI 기사를 찾아줘요">
+      <!-- 안테나 -->
+      <line x1="100" y1="38" x2="100" y2="18" stroke="#b9b2ff" stroke-width="5" stroke-linecap="round"/>
+      <circle class="antenna-light" cx="100" cy="14" r="9"/>
+      <!-- 귀 -->
+      <rect x="22" y="78" width="18" height="40" rx="9" fill="#5a4de0"/>
+      <rect x="160" y="78" width="18" height="40" rx="9" fill="#5a4de0"/>
+      <!-- 머리 -->
+      <rect x="36" y="36" width="128" height="112" rx="44" fill="#8f82ff"/>
+      <rect x="50" y="56" width="100" height="70" rx="30" fill="#1b1f3b"/>
+      <!-- 눈: 기본 -->
+      <g class="face f-idle blink">
+        <ellipse cx="78" cy="88" rx="9" ry="12" fill="#7ef0ff"/>
+        <ellipse cx="122" cy="88" rx="9" ry="12" fill="#7ef0ff"/>
+        <path d="M86 108 Q100 118 114 108" stroke="#7ef0ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+      </g>
+      <!-- 눈: 생각 중 -->
+      <g class="face f-think">
+        <path d="M68 90 L88 90" stroke="#7ef0ff" stroke-width="5" stroke-linecap="round"/>
+        <ellipse cx="122" cy="86" rx="9" ry="12" fill="#7ef0ff"/>
+        <circle cx="100" cy="111" r="5" fill="#7ef0ff"/>
+      </g>
+      <!-- 눈: 기쁨 -->
+      <g class="face f-happy">
+        <path d="M68 92 Q78 78 88 92" stroke="#7ef0ff" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M112 92 Q122 78 132 92" stroke="#7ef0ff" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M84 104 Q100 122 116 104 Z" fill="#7ef0ff"/>
+      </g>
+      <!-- 눈: 실패 -->
+      <g class="face f-sad">
+        <path d="M70 84 L86 92 M130 84 L114 92" stroke="#7ef0ff" stroke-width="5" stroke-linecap="round"/>
+        <path d="M86 114 Q100 104 114 114" stroke="#7ef0ff" stroke-width="4" fill="none" stroke-linecap="round"/>
+      </g>
+      <!-- 볼 -->
+      <circle cx="62" cy="110" r="7" fill="#ff8fb1" opacity=".55"/>
+      <circle cx="138" cy="110" r="7" fill="#ff8fb1" opacity=".55"/>
+      <!-- 몸 -->
+      <rect x="70" y="150" width="60" height="38" rx="16" fill="#8f82ff"/>
+      <circle cx="100" cy="168" r="7" fill="#ffd166"/>
+    </svg>
+    <div class="hint">👆 저를 눌러주세요!</div>
+  </div>
+
+  <div class="menu">
+    <button class="chip" data-lang="ko">🇰🇷 한국 AI 뉴스</button>
+    <button class="chip" data-lang="en">🌎 해외 AI 뉴스</button>
+    <button class="chip" data-lang="all">📚 전부 다</button>
+    <button class="chip" data-q="챗GPT">챗GPT</button>
+    <button class="chip" data-q="클로드">클로드</button>
+    <button class="chip" data-q="반도체">반도체</button>
+  </div>
+  <form class="ask" id="askForm">
+    <input id="kw" placeholder="누리에게 궁금한 AI 주제를 말해보세요 (예: 로봇)">
+    <button>부탁해!</button>
+  </form>
+
+  <div id="list"></div>
+</div>
+
+<script>
+const stage = document.getElementById('stage'), bubble = document.getElementById('bubble'),
+      list = document.getElementById('list');
+const NAME = localStorage.getItem('myName') || '';
+let busy = false, lastLang = 'ko';
+
+function setMood(m) { stage.className = 'stage ' + m; }
+function say(text) {
+  bubble.textContent = text;
+  bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop');
+}
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+// 첫 인사
+(() => {
+  const h = new Date().getHours();
+  const hi = h < 6 ? '늦은 밤이네요' : h < 12 ? '좋은 아침이에요' : h < 18 ? '좋은 오후예요' : '좋은 저녁이에요';
+  const d = new Date().toLocaleDateString('ko-KR', { month:'long', day:'numeric', weekday:'long' });
+  say(`${hi}${NAME ? ', ' + NAME + '님' : ''}! 저는 비서 누리예요 🤖 오늘은 ${d}. 저를 누르면 최신 AI 기사를 찾아드릴게요!`);
+})();
+
+function ago(iso) {
+  if (!iso) return '';
+  const m = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (m < 60) return `${Math.max(m,1)}분 전`;
+  if (m < 1440) return `${Math.floor(m/60)}시간 전`;
+  return `${Math.floor(m/1440)}일 전`;
+}
+const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function find(lang = 'ko', q = '') {
+  if (busy) { say('지금 열심히 찾는 중이에요! 잠깐만요 🏃'); return; }
+  busy = true; lastLang = lang;
+  setMood('thinking');
+  say(q ? `"${q}" 관련 AI 소식을 찾아볼게요... 🔎`
+        : pick(['뉴스 사이트를 둘러보는 중이에요... 🔎', '따끈한 AI 소식 가져올게요! 🏃',
+                '잠시만요, 기사들을 모으고 있어요... 📰']));
+  list.innerHTML = '';
+  try {
+    const res = await fetch(`/api/news?lang=${lang}&q=${encodeURIComponent(q)}`);
+    const items = await res.json();
+    if (!items.length) {
+      setMood('sad');
+      say('앗, 기사를 못 찾았어요 😢 다른 주제로 다시 부탁해 주세요.');
+    } else {
+      setMood('happy');
+      say(`짜잔! ${items.length}개의 기사를 찾았어요 🎉 제일 최신 소식은 "${items[0].title.slice(0, 40)}..." 이에요.`);
+      list.innerHTML = items.map((a, i) => `
+        <div class="card" style="animation-delay:${Math.min(i, 15) * 40}ms">
+          <a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.title)}</a>
+          <div class="meta"><span class="tag">${esc(a.source)}</span>${ago(a.date)}</div>
+          ${a.summary && !a.summary.startsWith(a.title.slice(0,20)) ? `<p class="summary">${esc(a.summary)}</p>` : ''}
+        </div>`).join('');
+      setTimeout(() => stage.classList.contains('happy') && setMood('idle'), 2500);
+    }
+  } catch (e) {
+    setMood('sad');
+    say('연결에 문제가 생겼어요 😢 비서 프로그램(assistant.py)이 켜져 있는지 확인해 주세요.');
+  }
+  busy = false;
+}
+
+// 캐릭터 클릭 → 기사 찾기
+document.getElementById('buddy').addEventListener('click', () => find(lastLang));
+
+// 빠른 메뉴
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =>
+  find(c.dataset.lang || 'ko', c.dataset.q || '')));
+
+// 직접 부탁하기 ("내 이름은 ○○" 이라고 말하면 이름을 기억해요)
+document.getElementById('askForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const input = document.getElementById('kw'), text = input.value.trim();
+  input.value = '';
+  const m = text.match(/(?:내 이름은|나는)\s*([^\s.!]+?)(?:이야|야|입니다|이에요|예요)?[.!]?$/);
+  if (m) {
+    localStorage.setItem('myName', m[1]);
+    setMood('happy'); say(`반가워요, ${m[1]}님! 이제 이름을 기억할게요 😊`);
+    return;
+  }
+  find(lastLang, text);
+});
+</script>
+</body>
+</html>
