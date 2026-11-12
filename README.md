@@ -2,6 +2,10 @@
 
 AI 직원 6명이 출근 → 회의 → 업무 → 보고까지 하는 나만의 AI 오피스입니다.
 
+💬 **관리자 한결**: 궁금한 건 무엇이든 물어보세요 (상단 '관리자에게 질문' 버튼).
+- 무료 AI(Ollama) 연결 시: 직접 생각해서 대답
+- 기본 모드: 오늘 보고서 · 위키백과 · 최신 뉴스를 찾아서 대답
+
 ## 실행 방법 (Windows)
 1. Python 설치: https://www.python.org/downloads (설치 시 "Add python.exe to PATH" 체크)
 2. 이 폴더의 `start.bat` 더블클릭

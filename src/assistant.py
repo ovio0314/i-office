@@ -58,10 +58,10 @@ def ollama_model():
     return next((m for m in models if "embed" not in m), None)
 
 
-def ask_ollama(model, system, prompt):
+def ask_ollama(model, system, messages):
     body = json.dumps({
         "model": model, "stream": False,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        "messages": [{"role": "system", "content": system}] + messages,
         "options": {"num_ctx": 8192, "temperature": 0.4},
     }).encode()
     req = urllib.request.Request(OLLAMA_URL + "/api/chat", data=body,
@@ -94,7 +94,7 @@ def _load_client():
 CLIENT, AI_STATUS = _load_client()
 
 
-def ask_claude(system, prompt):
+def ask_claude(system, messages):
     """Claude에게 일을 시키고 텍스트를 돌려받습니다. 실패하면 None."""
     import anthropic
     try:
@@ -105,7 +105,7 @@ def ask_claude(system, prompt):
             fallbacks="default",            # 거절 시 서버가 다른 모델로 자동 재시도
             output_config={"effort": "low"},
             system=system,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
         )
     except anthropic.AuthenticationError:
         print("[AI] API 키가 올바르지 않습니다.")
@@ -197,10 +197,16 @@ def fetch_feed(source, url):
     return items[:15]
 
 
-def collect(lang="ko", keyword=""):
-    feeds = FEEDS["ko"] + FEEDS["en"] if lang == "all" else list(FEEDS.get(lang, FEEDS["ko"]))
+def collect(lang="ko", keyword="", ai=True):
+    """기사 모으기. keyword가 있으면 구글 뉴스 검색 결과만 사용 (ai=True면 AI 관련으로 좁힘)"""
     if keyword:
-        feeds = [(f"검색: {keyword}", google_news(f"{keyword} AI", "en" if lang == "en" else "ko"))] + feeds
+        q = f"{keyword} AI" if ai else keyword
+        if lang == "all":
+            feeds = [(f"검색: {keyword}", google_news(q, "ko")), (f"검색: {keyword}", google_news(q, "en"))]
+        else:
+            feeds = [(f"검색: {keyword}", google_news(q, "en" if lang == "en" else "ko"))]
+    else:
+        feeds = FEEDS["ko"] + FEEDS["en"] if lang == "all" else list(FEEDS.get(lang, FEEDS["ko"]))
     with ThreadPoolExecutor(max_workers=8) as ex:
         results = ex.map(lambda f: fetch_feed(*f), feeds)
     seen, articles = set(), []
@@ -208,9 +214,6 @@ def collect(lang="ko", keyword=""):
         for a in items:
             key = re.sub(r"\W", "", a["title"].lower())[:60]
             if not a["link"] or key in seen:
-                continue
-            if keyword and keyword.lower() not in (a["title"] + a["summary"]).lower() \
-                    and not a["source"].startswith("검색"):
                 continue
             seen.add(key)
             articles.append(a)
@@ -348,10 +351,128 @@ def do_work(role, articles, outputs, instruction=""):
         prompt = f"## 오늘의 업무\n{task}\n\n## 수집된 AI 기사\n{articles_text(articles, n)}"
         if outputs:
             prompt += "\n\n## 팀원 보고\n" + "\n\n".join(f"[{k}]\n{v}" for k, v in outputs.items())
-        text = ask_ollama(model, system, prompt) if kind == "ollama" else ask_claude(system, prompt)
+        msgs = [{"role": "user", "content": prompt}]
+        text = ask_ollama(model, system, msgs) if kind == "ollama" else ask_claude(system, msgs)
         if text:
             return {"text": text, "ai": True}
     return {"text": template_work(role, articles, outputs), "ai": False}
+
+
+# ───────────────────────── 관리자 (질문에 대답) ─────────────────────────
+UA = {"User-Agent": "AI-Office/1.0 (personal desktop app)"}
+QUESTION_WORDS = (r"어때요?|뭐\s*하는|무슨|어떤|에\s*대해서?|에\s*관해서?|이?란\s*(무엇|뭐)\S*|무엇인가요|뭔가요|뭐예요|뭐야|무엇|뭐|"
+                  r"알려\s*주세요|알려\s*줘|설명해\s*주세요|설명해\s*줘|궁금해요?|어떻게|좀|해\s*줘|요\?|\?")
+
+
+PARTICLE = r"(이에요|예요|인가요|이란|이야|에서|에게|으로|은|는|이|가|을|를|의|에|로|와|과|도|만|야|란)$"
+FILLER = {"하는", "요즘", "최근", "지금", "정말", "진짜", "그", "이", "저", "것", "거"}
+
+
+def search_candidates(question):
+    """질문에서 검색어 후보 만들기: '엔비디아가 뭐하는 회사야?' → ['엔비디아 회사', '엔비디아']"""
+    text = re.sub(QUESTION_WORDS, " ", question)
+    words = []
+    for w in re.findall(r"[\w.+#-]+", text):
+        w2 = re.sub(PARTICLE, "", w) if len(w) > 2 else w
+        if w2 and w2 not in FILLER:
+            words.append(w2)
+    cands = []
+    for k in (" ".join(words[:4]), " ".join(words[:2]), words[0] if words else ""):
+        if k and k not in cands:
+            cands.append(k[:40])
+    return cands or [question[:40]]
+
+
+def get_json(url, timeout=8):
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def wiki_summary(keyword):
+    """한국어 위키백과에서 요약을 찾습니다(무료). 실패하면 None."""
+    try:
+        q = urllib.parse.quote(keyword)
+        hits = get_json(f"https://ko.wikipedia.org/w/api.php?action=query&list=search&srsearch={q}"
+                        "&format=json&srlimit=1")["query"]["search"]
+        if not hits:
+            return None
+        title = urllib.parse.quote(hits[0]["title"].replace(" ", "_"))
+        d = get_json(f"https://ko.wikipedia.org/api/rest_v1/page/summary/{title}")
+        if not d.get("extract"):
+            return None
+        return {"title": d.get("title"), "text": d["extract"],
+                "url": d.get("content_urls", {}).get("desktop", {}).get("page", "")}
+    except Exception as e:
+        print(f"[관리자] 위키백과 검색 실패: {e}")
+        return None
+
+
+def office_context(articles, outputs):
+    parts = []
+    if outputs:
+        parts.append("## 오늘 팀원들의 보고\n" + "\n\n".join(f"[{k}]\n{v[:1500]}" for k, v in outputs.items()))
+    if articles:
+        parts.append("## 오늘 수집한 기사\n" + articles_text(articles, 15))
+    return "\n\n".join(parts) or "(아직 오늘 업무 전이라 수집한 자료가 없음)"
+
+
+def clean_history(history):
+    """user/assistant 가 번갈아 오도록 정리 (첫 메시지는 user)"""
+    msgs = []
+    for m in history[-10:]:
+        role, text = m.get("role"), (m.get("text") or "")[:2000]
+        if role not in ("user", "assistant") or not text:
+            continue
+        if not msgs and role != "user":
+            continue
+        if msgs and msgs[-1]["role"] == role:
+            msgs[-1]["content"] += "\n" + text
+        else:
+            msgs.append({"role": role, "content": text})
+    return msgs
+
+
+def basic_answer(question, articles, outputs):
+    """AI 두뇌 없이: 오늘 보고서 / 위키백과 / 뉴스 검색으로 대답"""
+    q = question.strip()
+    if outputs and re.search(r"보고서|오늘.*(요약|뉴스|소식|일)|키워드|트렌드|브리핑", q):
+        ans = "대표님, 오늘 팀 보고 내용이에요.\n\n" + outputs.get("secretary", "")
+        if "analyst" in outputs:
+            ans += "\n\n" + outputs["analyst"]
+        return ans
+    cands = search_candidates(q)
+    keyword, parts, wiki, news = cands[0], [], None, []
+    for k in cands:                       # 긴 검색어부터 시도하고, 없으면 핵심 단어로
+        wiki = wiki or wiki_summary(k)
+        news = collect("ko", k, ai=False)[:5]
+        if news or wiki:
+            keyword = k
+            break
+    if wiki:
+        parts.append(f"### 📚 {wiki['title']}\n{wiki['text']}\n\n🔗 [위키백과에서 더 보기]({wiki['url']})")
+    if news:
+        parts.append(f"### 📰 '{keyword}' 관련 최신 뉴스\n" + "\n".join(f"- {link_line(a)}" for a in news))
+    if not parts:
+        return (f"죄송해요 대표님, '{keyword}'에 대한 자료를 찾지 못했어요. 😢\n"
+                "다른 단어로 물어봐 주시겠어요?")
+    return (f"대표님, '{keyword}'에 대해 찾아봤어요.\n\n" + "\n\n".join(parts) +
+            "\n\n_💡 무료 AI(Ollama)를 연결하면 제가 직접 생각해서 더 자연스럽게 대답해 드려요._")
+
+
+def answer_question(question, history, articles, outputs):
+    kind, model = current_brain()
+    if kind:
+        system = ("너는 '나만의 AI 오피스'의 관리자 '한결'이야. 대표님의 어떤 질문이든 한국어로 친절하고 정확하게 대답해. "
+                  "모르는 것은 모른다고 솔직히 말하고, 지어내지 마. 필요하면 마크다운으로 정리해. "
+                  "오늘 회사 자료가 질문과 관련 있으면 활용해.\n\n" + office_context(articles, outputs))
+        msgs = clean_history(history) + [{"role": "user", "content": question}]
+        if len(msgs) > 1 and msgs[-2]["role"] == "user":      # 연속 user 방지
+            msgs[-2]["content"] += "\n" + msgs.pop()["content"]
+        text = ask_ollama(model, system, msgs) if kind == "ollama" else ask_claude(system, msgs)
+        if text:
+            return {"answer": text, "source": kind}
+    return {"answer": basic_answer(question, articles, outputs), "source": "basic"}
 
 
 # ───────────────────────── 결과물 저장 ─────────────────────────
@@ -410,6 +531,12 @@ class Handler(BaseHTTPRequestHandler):
             if instruction and current_brain()[0] is None:   # 기본 모드: 지시를 키워드 검색으로 처리
                 articles = collect("ko", instruction[:30]) or articles
             return self._json(do_work(body.get("role"), articles, body.get("outputs") or {}, instruction))
+        if self.path == "/api/ask":
+            q = (body.get("question") or "").strip()[:1000]
+            if not q:
+                return self._json({"answer": "무엇이 궁금하신가요?", "source": "basic"})
+            return self._json(answer_question(q, body.get("history") or [], body.get("articles") or [],
+                                              body.get("outputs") or {}))
         if self.path == "/api/save":
             return self._json({"name": save_report(body.get("markdown", ""))})
         self._send(404, "text/plain", b"Not found")

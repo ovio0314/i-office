@@ -110,6 +110,20 @@
   .order input{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px}
   .order button{padding:9px 12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
   .hint{color:var(--muted);font-size:13px}
+  /* 관리자 대화창 */
+  .chat{height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-top:10px;
+        background:#fcf8fa;border-radius:12px;padding:10px}
+  .msg{max-width:88%;padding:8px 11px;border-radius:12px;font-size:13.5px;line-height:1.55;overflow-wrap:anywhere}
+  .msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+  .msg.assistant{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.assistant p{margin:4px 0} .msg.assistant h3{font-size:14px;margin:6px 0 4px}
+  .msg.assistant ul,.msg.assistant ol{margin:4px 0;padding-left:18px} .msg a{color:#c2457a}
+  .msg .src{display:block;margin-top:4px;font-size:11px;color:var(--muted)}
+  .msg.wait{color:var(--muted);font-style:italic}
+  .sugg{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .sugg button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 10px;font-size:12px;cursor:pointer}
+  .sugg button:hover{border-color:var(--accent)}
+  .desk.boss{background:#cfa47a;box-shadow:0 3px 0 #a87f57}
 
   /* ── 결과물 ── */
   .results{margin-top:14px;display:grid;grid-template-columns:1fr 280px;gap:14px}
@@ -150,6 +164,7 @@
       <option value="en">🌎 해외 뉴스</option>
     </select>
     <button class="btn" id="homeBtn">🏠 퇴근</button>
+    <button class="btn" id="askBtn">💬 관리자에게 질문</button>
     <a class="btn" href="/nuri" style="text-decoration:none">🤖 누리 뉴스창</a>
   </div>
 
@@ -166,14 +181,14 @@
       <div class="deco" style="left:70%;top:89%">☕</div>
       <div class="deco" style="left:84%;top:90%">🛋️</div>
       <div class="deco" style="left:95%;top:89%">🪴</div>
-      <div class="deco" style="left:95%;top:64%">📚</div>
+      <div class="deco" style="left:69.5%;top:64%">📚</div>
       <div class="phase" id="phase"></div>
     </div>
 
     <div class="side">
       <div class="panel staff-card" id="staffCard">
         <h3>👥 직원 정보</h3>
-        <p class="hint">사무실의 직원을 클릭하면 프로필과 오늘 한 일을 볼 수 있고, 따로 업무를 지시할 수도 있어요.</p>
+        <p class="hint">사무실의 직원을 클릭하면 프로필과 오늘 한 일을 볼 수 있고, 따로 업무를 지시할 수도 있어요. 궁금한 게 있으면 <b>💬 관리자에게 질문</b>을 눌러보세요!</p>
       </div>
       <div class="panel">
         <h3>📝 업무 일지</h3>
@@ -209,10 +224,12 @@ const STAFF = [
    job:'대표님이 해볼 만한 일과 아이디어를 제안해요.', plan:'아이디어 기획할게요.', desk:[32,52]},
   {id:'secretary', name:'미소', team:'비서실', emoji:'📋', hair:'#8a5a44', shirt:'#ffb3c7',
    job:'팀원들의 보고를 모아 최종 보고서를 정리하고 저장해요.', plan:'보고서 정리해서 드릴게요.', desk:[51,52]},
+  {id:'manager', name:'한결', team:'관리실', emoji:'🧑‍💼', hair:'#262333', shirt:'#6f86b8', manager:true,
+   job:'대표님이 궁금한 것은 무엇이든 대답해 드려요.', plan:'궁금한 건 언제든 저에게 물어보세요!', desk:[89,61]},
 ];
 const DOOR = [40, 99], HALL_Y = 76;
-const MEET_SEATS = [[74,28],[82,22],[90,28],[74,47],[82,53],[90,47]];
-const LOUNGE = [[70,93],[75,93],[80,93],[87,93],[91,93],[78,88]];
+const MEET_SEATS = [[74,28],[82,22],[90,28],[74,47],[82,53],[90,47],[70,37]];
+const LOUNGE = [[69,95],[74,95],[79,95],[89,95],[94,95],[73,87.5],[91,87.5]];
 
 /* ───────── 상태 ───────── */
 let speed = 1, paused = false, running = false, inOffice = false;
@@ -245,7 +262,8 @@ function charSVG(s){
 STAFF.forEach((s, i) => {
   const d = document.createElement('div');
   d.className = 'desk'; d.style.left = s.desk[0]+'%'; d.style.top = s.desk[1]+'%';
-  d.innerHTML = `<div class="mon"></div><div class="plate">${s.emoji} ${s.team}</div>`;
+  if (s.manager) d.classList.add('boss');
+  d.innerHTML = `<div class="mon"></div><div class="plate">${s.emoji} ${s.manager ? '관리자석' : s.team}</div>`;
   office.appendChild(d); s.deskEl = d;
 
   const e = document.createElement('div');
@@ -297,7 +315,12 @@ function say(s, text, ms = 2600){
   clearTimeout(s.sayT);
   if (ms) s.sayT = setTimeout(() => b.classList.remove('show'), ms / speed);
 }
-function setStatus(s, st){ s.status = st; if (selected === s) showStaff(s); }
+function setStatus(s, st){
+  s.status = st;
+  if (selected !== s) return;
+  if (s.manager) { const el = $('mgrStatus'); if (el) el.textContent = st; }
+  else showStaff(s);
+}
 function log(text){
   const d = document.createElement('div');
   d.innerHTML = `<span class="t">${$('clock').textContent}</span>${text}`;
@@ -496,6 +519,7 @@ async function loadReports(){
 
 /* ───────── 직원 카드 & 업무 지시 ───────── */
 function showStaff(s){
+  if (s.manager) return showChat(s);
   selected = s;
   STAFF.forEach(x => x.el.classList.toggle('sel', x === s));
   const out = outputs[s.id];
@@ -555,6 +579,68 @@ document.querySelectorAll('#speed button').forEach(b => b.onclick = () => {
   speed = +b.dataset.s;
   document.querySelectorAll('#speed button').forEach(x => x.classList.toggle('on', x === b));
 });
+
+/* ───────── 관리자 대화 ───────── */
+let chat = JSON.parse(localStorage.getItem('chat') || '[]');
+const saveChat = () => localStorage.setItem('chat', JSON.stringify(chat.slice(-30)));
+const SRC = {ollama:'🧠 무료 AI', claude:'🧠 Claude', basic:'🔎 위키백과·뉴스 검색'};
+
+function showChat(s){
+  selected = s;
+  STAFF.forEach(x => x.el.classList.toggle('sel', x === s));
+  $('staffCard').innerHTML = `
+    <h3>💬 관리자 ${s.name}에게 질문하기</h3>
+    <div class="top"><div class="avatar" style="width:44px">${charSVG(s)}</div>
+      <div><b>${s.name}</b> <span class="role">${s.emoji} ${s.team}</span>
+      <div class="role">상태: <b id="mgrStatus">${s.status}</b></div></div></div>
+    <div class="chat" id="chatBox"></div>
+    <div class="sugg" id="sugg">
+      <button>오늘 뉴스 요약해줘</button><button>생성형 AI가 뭐야?</button>
+      <button>AI 공부 어떻게 시작해?</button><button>대화 지우기</button>
+    </div>
+    <form class="order" id="askForm">
+      <input id="askInput" placeholder="궁금한 걸 물어보세요 (예: 엔비디아가 뭐하는 회사야?)" autocomplete="off">
+      <button>질문</button>
+    </form>`;
+  renderChat();
+  $('askForm').onsubmit = e => { e.preventDefault(); const v = $('askInput').value.trim(); $('askInput').value = ''; ask(v); };
+  $('sugg').querySelectorAll('button').forEach(b => b.onclick = () => {
+    if (b.textContent === '대화 지우기') { chat = []; saveChat(); renderChat(); } else ask(b.textContent);
+  });
+  $('askInput').focus();
+}
+
+function renderChat(pending){
+  const box = $('chatBox'); if (!box) return;
+  const items = chat.length ? chat : [{role:'assistant', text:'안녕하세요 대표님! 관리자 한결입니다. 궁금한 건 무엇이든 물어보세요 😊'}];
+  box.innerHTML = items.map(m => `<div class="msg ${m.role}">${m.role === 'user' ? md2html(m.text).replace(/^<p>|<\/p>$/g,'') : md2html(m.text)}${m.src ? `<span class="src">${SRC[m.src] || ''}</span>` : ''}</div>`).join('')
+    + (pending ? '<div class="msg assistant wait">생각하는 중이에요... 🤔</div>' : '');
+  box.scrollTop = box.scrollHeight;
+}
+
+let asking = false;
+async function ask(q){
+  if (!q || asking) return;
+  const mgr = byId('manager');
+  if (selected !== mgr) showChat(mgr);
+  asking = true;
+  const history = chat.slice(-10);
+  chat.push({role:'user', text:q}); saveChat(); renderChat(true);
+  log(`👑 대표님 → <b>한결</b>: "${q.length > 30 ? q.slice(0, 30) + '…' : q}"`);
+  if (inOffice) { mgr.el.classList.add('typing'); say(mgr, '음... 생각 중이에요 🤔', 0); }
+  setStatus(mgr, '질문에 대답하는 중');
+  try {
+    const r = await api('/api/ask', {question:q, history, articles: articles.slice(0, 20), outputs});
+    chat.push({role:'assistant', text:r.answer, src:r.source});
+    if (inOffice) say(mgr, '대답 드렸어요! 💬');
+  } catch (e) {
+    chat.push({role:'assistant', text:'앗, 서버에 연결할 수 없어요 😢 비서 프로그램이 켜져 있는지 확인해 주세요.'});
+  }
+  mgr.el.classList.remove('typing');
+  saveChat(); renderChat(); setStatus(mgr, inOffice ? '대기 중' : '출근 전 (질문은 언제든 OK)');
+  asking = false;
+}
+$('askBtn').onclick = () => showChat(byId('manager'));
 
 checkBrain(); loadReports();
 log('👋 대표님, 환영합니다! "오늘 업무 시작하기"를 눌러주세요.');
